@@ -1,4 +1,4 @@
-##  Copyright (c) 2015 The WebM project authors. All Rights Reserved.
+	##  Copyright (c) 2015 The WebM project authors. All Rights Reserved.
 ##
 ##  Use of this source code is governed by a BSD-style license
 ##  that can be found in the LICENSE file in the root of the source
@@ -6,7 +6,7 @@
 ##  in the file PATENTS.  All contributing project authors may
 ##  be found in the AUTHORS file in the root of the source tree.
 cmake_minimum_required(VERSION 3.2)
-project(LIBWEBM CXX)
+project(LIBWEBM)
 
 include(GNUInstallDirs)
 include("${CMAKE_CURRENT_SOURCE_DIR}/build/cxx_flags.cmake")
@@ -97,7 +97,9 @@ set(mkvparser_sources
     "${LIBWEBM_SRC_DIR}/mkvparser/mkvreader.h"
     "${LIBWEBM_SRC_DIR}/common/webmids.h")
 
-set(mkvparser_sample_sources "${LIBWEBM_SRC_DIR}/mkvparser_sample.cc")
+set(mkvparser_sample_sources
+    "${LIBWEBM_SRC_DIR}/mkvparser_sample.cc")
+
 set(mkvparser_tests_sources
     "${LIBWEBM_SRC_DIR}/testing/mkvparser_tests.cc"
     "${LIBWEBM_SRC_DIR}/testing/test_util.cc"
@@ -340,8 +342,11 @@ if (WIN32)
   set_target_properties(webm PROPERTIES PREFIX lib)
 endif ()
 
+set(libnmf_sources "${LIBWEBM_SRC_DIR}/libnmf.c")
+add_library(nmf ${libnmf_sources})
+
 add_executable(mkvparser_sample ${mkvparser_sample_sources})
-target_link_libraries(mkvparser_sample LINK_PUBLIC webm)
+target_link_libraries(mkvparser_sample LINK_PUBLIC webm nmf)
 
 add_executable(mkvmuxer_sample ${mkvmuxer_sample_sources}
                $<TARGET_OBJECTS:webvtt_common>)

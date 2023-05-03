@@ -15,6 +15,7 @@
 
 #include "mkvparser/mkvparser.h"
 #include "mkvparser/mkvreader.h"
+#include "libnmf.h"
 
 namespace {
 const wchar_t* utf8towcs(const char* str) {
@@ -350,6 +351,43 @@ int main(int argc, char* argv[]) {
     return EXIT_FAILURE;
   }
 
+        struct nmf_container info;
+        info.header.duration = double(duration_ns) / 1000000000; //in secs
+        info.header.track_num = 2;
+
+        info.tracks = (struct nmf_track*)malloc(sizeof(struct nmf_track) * 2);
+        info.tracks[0].header.index = 1; //from info, need to modified.
+        info.tracks[0].header.type = NMF_TRACK_VIDEO;
+        info.tracks[0].header.reserved = 0;
+        info.tracks[0].header.codec = NMF_VIDEO_MJPG;
+
+        struct jfif_container video_info_test;
+        video_info_test.width = 1920;
+        video_info_test.height = 1080;
+        video_info_test.format = MJPG_FMT_YUV420 | MJPG_FMT_DQT_D;
+        video_info_test.interval = 41666666;
+
+        info.tracks[0].length = sizeof(struct jfif_container) / 4;
+        info.tracks[0].payload = (uint32_t*)&video_info_test;
+
+        info.tracks[1].header.index = 2; //from info, need to modified.
+        info.tracks[1].header.type = NMF_TRACK_AUDIO;
+        info.tracks[1].header.codec = NMF_AUDIO_FLAC;
+
+        const char attachment[8] = "ABCDEFG"; //for test right now
+        info.tracks[1].length = 2;
+        info.tracks[1].payload = (uint32_t*)attachment;
+
+	info.index.fp = 0; //here no cue right now.
+	info.index.scale = timeCodeScale;
+	info.index.count = clusterCount;
+
+	FILE* fd = fopen("output.nmf", "wb");
+	uint32_t pos_index;
+        write_nmf(fd, &info, &pos_index);
+
+	int frame_total = 0;
+
   const mkvparser::Cluster* pCluster = pSegment->GetFirst();
 
   while (pCluster != NULL && !pCluster->EOS()) {
@@ -369,6 +407,14 @@ int main(int argc, char* argv[]) {
       fflush(stdout);
       return EXIT_FAILURE;
     }
+
+	struct nmf_cluster block;
+	block.header.stamp = timeCode; //in ms
+
+        struct nmf_frames frames[4];
+	int frame_num = 0;
+
+//	frame_total++;
 
     while (pBlockEntry != NULL && !pBlockEntry->EOS()) {
       const mkvparser::Block* const pBlock = pBlockEntry->GetBlock();
@@ -393,6 +439,27 @@ int main(int argc, char* argv[]) {
           const long size = theFrame.len;
           const long long offset = theFrame.pos;
           printf("\t\t\t %15ld,%15llx\n", size, offset);
+
+		unsigned char* block;
+		block = (unsigned char*)malloc(1024768);
+		theFrame.Read(&reader, block);
+
+//		char filename[256];
+//		sprintf(filename, "output%d.bin", frame_total);
+//		FILE* td = fopen(filename, "wb");
+//		fwrite(block, 1, ret, td);
+//		fclose(td);
+
+		frame_total++;
+
+		frames[frame_num].tag = tn + (size << 8);
+		int length = (size + 3) & 0xFFFFFFFC;
+		frames[frame_num].payload = (uint32_t*)malloc(length);
+		memcpy(frames[frame_num].payload, block, size);
+		memset((unsigned char*)frames[frame_num].payload + size, 0, length - size);
+		free(block);
+
+		frame_num++;
         }
       }
 
@@ -405,8 +472,22 @@ int main(int argc, char* argv[]) {
       }
     }
 
+	block.header.frame_num = frame_num;
+	block.frames = (struct nmf_frames*)malloc(frame_num * sizeof(struct nmf_frames));
+	for(int count = 0; count < frame_num; count++)
+		block.frames[count] = frames[count];
+
+	write_nmf_cluster(fd, &block);
+
+	for(int count = 0; count < frame_num; count++) {
+		free(frames[count].payload);
+	}
+	free(block.frames);
+
     pCluster = pSegment->GetNext(pCluster);
   }
+
+	fclose(fd);
 
   if (InputHasCues(pSegment.get())) {
     // Walk them.
