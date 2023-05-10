@@ -1,10 +1,11 @@
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
 #ifndef __LIBNMF_INCLUDE__
 #define __LIBNMF_INCLUDE__
+
+#define _FILE_OFFSET_BITS 64
+
+#undef __STRICT_ANSI__
+#include <stdint.h>
+#include <stdio.h>
 
 #ifdef __cplusplus
 	#define EXTERN_C extern "C"
@@ -84,7 +85,7 @@ void parse_index(uint32_t* buffer, uint32_t length, struct nmf_index* content);
 void parse_nmf(uint32_t* buffer, uint32_t length, struct nmf_container* content);
 
 EXTERN_C uint64_t read_nmf(FILE* fd, struct nmf_container* container);
-EXTERN_C void read_nmf_cluster(FILE* fd, struct nmf_container* containter, struct nmf_cluster* content);
+EXTERN_C uint32_t read_nmf_cluster(FILE* fd, struct nmf_cluster* content);
 
 EXTERN_C void write_nmf(FILE* fd, struct nmf_container* container, uint32_t* pos_index);
 EXTERN_C void write_nmf_cluster(FILE* fd, struct nmf_cluster* content);

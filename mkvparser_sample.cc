@@ -10,6 +10,8 @@
 // library, which allows clients to handle a Matroska format file.
 #include <cstdio>
 #include <cstdlib>
+#include <climits>
+#include <cstring>
 #include <memory>
 #include <new>
 
@@ -390,6 +392,9 @@ int main(int argc, char* argv[]) {
 
   const mkvparser::Cluster* pCluster = pSegment->GetFirst();
 
+	int frame_biggest = 0;
+	int frame_smallest = INT_MAX;
+
   while (pCluster != NULL && !pCluster->EOS()) {
     const long long timeCode = pCluster->GetTimeCode();
     printf("\t\tCluster Time Code\t: %lld\n", timeCode);
@@ -444,6 +449,11 @@ int main(int argc, char* argv[]) {
 		block = (unsigned char*)malloc(1024768);
 		theFrame.Read(&reader, block);
 
+		if (trackType == mkvparser::Track::kVideo) {
+			frame_biggest = size > frame_biggest ? size : frame_biggest;
+			frame_smallest = size < frame_smallest ? size : frame_smallest;
+		}
+
 //		char filename[256];
 //		sprintf(filename, "output%d.bin", frame_total);
 //		FILE* td = fopen(filename, "wb");
@@ -452,7 +462,7 @@ int main(int argc, char* argv[]) {
 
 		frame_total++;
 
-		frames[frame_num].tag = tn + (size << 8);
+		frames[frame_num].tag = (tn - 1) + (size << 8);
 		int length = (size + 3) & 0xFFFFFFFC;
 		frames[frame_num].payload = (uint32_t*)malloc(length);
 		memcpy(frames[frame_num].payload, block, size);
@@ -488,6 +498,7 @@ int main(int argc, char* argv[]) {
   }
 
 	fclose(fd);
+	printf("big:%d small:%d\n", frame_biggest, frame_smallest);
 
   if (InputHasCues(pSegment.get())) {
     // Walk them.

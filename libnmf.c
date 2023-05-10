@@ -1,8 +1,9 @@
+#include "libnmf.h"
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "libnmf.h"
 
 void parse_header(uint32_t* buffer, size_t length, struct nmf_header* content) {
 	if (length != sizeof(struct nmf_header) / 4) {
@@ -20,16 +21,16 @@ void parse_track(uint32_t* buffer, size_t length, struct nmf_track* content) {
 	}
 	struct nmf_track_header payload;
 	memcpy(&payload, buffer, sizeof(struct nmf_track_header));
-	memcpy(&content[payload.index].header, &payload, sizeof(struct nmf_track_header));
-	buffer = buffer + sizeof(struct nmf_track_header) / 4;
-	length = length - sizeof(struct nmf_track_header) / 4;
+	memcpy(&content->header, &payload, sizeof(struct nmf_track_header));
+	buffer = buffer + ((uint32_t)sizeof(struct nmf_track_header) / 4);
+	length = length - ((uint32_t)sizeof(struct nmf_track_header) / 4);
 	if (length != 0) {
-		content[payload.index].length = length;
-		content[payload.index].payload = (uint32_t*)malloc(4 * length);
-		memcpy(content[payload.index].payload, buffer, 4 * length);
+		content->length = length;
+		content->payload = (uint32_t*)malloc(4 * length);
+		memcpy(content->payload, buffer, 4 * length);
 	} else {
-		content[payload.index].length = 0;
-		content[payload.index].payload = NULL;
+		content->length = 0;
+		content->payload = NULL;
 	}
 	return;
 }
@@ -44,6 +45,7 @@ void parse_index(uint32_t* buffer, uint32_t length, struct nmf_index* content) {
 }
 
 void parse_nmf(uint32_t* buffer, uint32_t length, struct nmf_container* content) {
+	int tn = 0;
 	int process = 0;
 	while (process < length) {
 		uint32_t tag = buffer[process];
@@ -63,7 +65,7 @@ void parse_nmf(uint32_t* buffer, uint32_t length, struct nmf_container* content)
 			break;
 		case NMF_TRACK:
 			process++;
-			parse_track(&buffer[process], size, content->tracks);
+			parse_track(&buffer[process], size, &content->tracks[tn++]);
 			break;
 		case NMF_INDEX:
 			process++;
@@ -86,7 +88,7 @@ uint64_t read_nmf(FILE* fd, struct nmf_container* container) {
 		exit(1);
 	}
 
-	fseeko(fd, 0, SEEK_END);
+	fseeko(fd, 0L, SEEK_END);
 	uint64_t file_size = ftello(fd);
 	if (file_size < 3) {
 		printf("FIXME! wrong file size!\n");
@@ -111,18 +113,18 @@ uint64_t read_nmf(FILE* fd, struct nmf_container* container) {
 	return file_size;
 }
 
-void read_nmf_cluster(FILE* fd, struct nmf_container* containter, struct nmf_cluster* content) {
+uint32_t read_nmf_cluster(FILE* fd, struct nmf_cluster* content) {
 	uint32_t length;
 	fread(&length, 4, 1, fd);
 	fread(&content->header, 4, sizeof(struct nmf_cluster_header) / 4, fd);
 	content->frames = malloc(sizeof(struct nmf_frames) * content->header.frame_num);
 	for (int i = 0; i < content->header.frame_num; i++) {
 		fread(&content->frames[i].tag, 4, 1, fd);
-		uint32_t length = content->frames[i].tag >> 16;
+		uint32_t length = ((content->frames[i].tag >> 8) + 3) / 4;
 		content->frames[i].payload = malloc(4 * length);
 		fread(content->frames[i].payload, 4, length, fd);
 	}
-	return;
+	return length;
 }
 
 void write_nmf(FILE* fd, struct nmf_container* container, uint32_t* pos_index) {
